@@ -140,7 +140,7 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
 
         textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
             if (status != TextToSpeech.ERROR) {
-                textToSpeech.setLanguage(Locale.US);
+                textToSpeech.setLanguage(Locale.UK);
             }
         });
 
