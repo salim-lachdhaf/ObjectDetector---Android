@@ -16,6 +16,7 @@
 
 package org.tensorflow.lite.examples.classification;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -24,6 +25,7 @@ import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
@@ -43,7 +45,6 @@ import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.text.TextUtils;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.LayoutInflater;
@@ -54,7 +55,6 @@ import android.view.ViewGroup;
 import android.widget.Toast;
 
 import org.tensorflow.lite.examples.classification.customview.AutoFitTextureView;
-import org.tensorflow.lite.examples.classification.env.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,9 +64,11 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-public class CameraConnectionFragment extends Fragment {
-    private static final Logger LOGGER = new Logger();
+import static androidx.core.content.ContextCompat.checkSelfPermission;
 
+public class CameraConnectionFragment extends Fragment {
+    public CameraConnectionFragment() {
+    }
     /**
      * The camera preview size will be chosen to be the smallest frame by pixel size capable of
      * containing a DESIRED_SIZE x DESIRED_SIZE square.
@@ -94,17 +96,17 @@ public class CameraConnectionFragment extends Fragment {
     /**
      * A {@link OnImageAvailableListener} to receive frames as they are available.
      */
-    private final OnImageAvailableListener imageListener;
+    private OnImageAvailableListener imageListener;
     /**
      * The input size in pixels desired by TensorFlow (width and height of a square bitmap).
      */
-    private final Size inputSize;
+    private Size inputSize;
     /**
      * The layout identifier to inflate for this Fragment.
      */
-    private final int layout;
+    private int layout;
 
-    private final ConnectionCallback cameraConnectionCallback;
+    private ConnectionCallback cameraConnectionCallback;
     private final CameraCaptureSession.CaptureCallback captureCallback =
             new CameraCaptureSession.CaptureCallback() {
                 @Override
@@ -251,8 +253,8 @@ public class CameraConnectionFragment extends Fragment {
 
         // Collect the supported resolutions that are at least as big as the preview Surface
         boolean exactSizeFound = false;
-        final List<Size> bigEnough = new ArrayList<Size>();
-        final List<Size> tooSmall = new ArrayList<Size>();
+        final List<Size> bigEnough = new ArrayList<>();
+        final List<Size> tooSmall = new ArrayList<>();
         for (final Size option : choices) {
             if (option.equals(desiredSize)) {
                 // Set the size but don't return yet so that remaining sizes will still be logged.
@@ -266,22 +268,17 @@ public class CameraConnectionFragment extends Fragment {
             }
         }
 
-        LOGGER.i("Desired size: " + desiredSize + ", min size: " + minSize + "x" + minSize);
-        LOGGER.i("Valid preview sizes: [" + TextUtils.join(", ", bigEnough) + "]");
-        LOGGER.i("Rejected preview sizes: [" + TextUtils.join(", ", tooSmall) + "]");
 
         if (exactSizeFound) {
-            LOGGER.i("Exact size match found.");
             return desiredSize;
         }
 
         // Pick the smallest of those, assuming we found any
         if (bigEnough.size() > 0) {
             final Size chosenSize = Collections.min(bigEnough, new CompareSizesByArea());
-            LOGGER.i("Chosen size: " + chosenSize.getWidth() + "x" + chosenSize.getHeight());
+
             return chosenSize;
         } else {
-            LOGGER.e("Couldn't find any suitable preview size");
             return choices[0];
         }
     }
@@ -302,13 +299,7 @@ public class CameraConnectionFragment extends Fragment {
     private void showToast(final String text) {
         final Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(activity, text, Toast.LENGTH_SHORT).show();
-                        }
-                    });
+            activity.runOnUiThread(() -> Toast.makeText(activity, text, Toast.LENGTH_SHORT).show());
         }
     }
 
@@ -386,7 +377,7 @@ public class CameraConnectionFragment extends Fragment {
                 textureView.setAspectRatio(previewSize.getHeight(), previewSize.getWidth());
             }
         } catch (final CameraAccessException e) {
-            LOGGER.e(e, "Exception!");
+
         } catch (final NullPointerException e) {
             // Currently an NPE is thrown when the Camera2API is used but not supported on the
             // device this code runs.
@@ -412,9 +403,17 @@ public class CameraConnectionFragment extends Fragment {
             if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
+            if (checkSelfPermission(getActivity(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for Activity#requestPermissions for more details.
+                return;
+            }
             manager.openCamera(cameraId, stateCallback, backgroundHandler);
         } catch (final CameraAccessException e) {
-            LOGGER.e(e, "Exception!");
+
         } catch (final InterruptedException e) {
             throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
         }
@@ -463,8 +462,8 @@ public class CameraConnectionFragment extends Fragment {
             backgroundThread.join();
             backgroundThread = null;
             backgroundHandler = null;
-        } catch (final InterruptedException e) {
-            LOGGER.e(e, "Exception!");
+        } catch (InterruptedException ignored) {
+
         }
     }
 
@@ -486,7 +485,6 @@ public class CameraConnectionFragment extends Fragment {
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewRequestBuilder.addTarget(surface);
 
-            LOGGER.i("Opening camera preview: " + previewSize.getWidth() + "x" + previewSize.getHeight());
 
             // Create the reader for the preview frames.
             previewReader =
@@ -524,7 +522,7 @@ public class CameraConnectionFragment extends Fragment {
                                 captureSession.setRepeatingRequest(
                                         previewRequest, captureCallback, backgroundHandler);
                             } catch (final CameraAccessException e) {
-                                LOGGER.e(e, "Exception!");
+
                             }
                         }
 
@@ -535,7 +533,7 @@ public class CameraConnectionFragment extends Fragment {
                     },
                     null);
         } catch (final CameraAccessException e) {
-            LOGGER.e(e, "Exception!");
+
         }
     }
 

@@ -19,12 +19,9 @@ import android.app.Activity;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
-import android.os.SystemClock;
 import android.os.Trace;
 
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.examples.classification.env.Logger;
-import org.tensorflow.lite.gpu.GpuDelegate;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -42,24 +39,6 @@ import java.util.PriorityQueue;
  * A classifier specialized to label images using TensorFlow Lite.
  */
 public abstract class Classifier {
-    private static final Logger LOGGER = new Logger();
-
-    /**
-     * The model type used for classification.
-     */
-    public enum Model {
-        FLOAT,
-        QUANTIZED,
-    }
-
-    /**
-     * The runtime device type used for executing classification.
-     */
-    public enum Device {
-        CPU,
-        NNAPI,
-        GPU
-    }
 
     /**
      * Number of results to show in the UI.
@@ -94,11 +73,6 @@ public abstract class Classifier {
     private List<String> labels;
 
     /**
-     * Optional GPU delegate for accleration.
-     */
-    private GpuDelegate gpuDelegate = null;
-
-    /**
      * An instance of the driver class to run model inference with Tensorflow Lite.
      */
     protected Interpreter tflite;
@@ -106,24 +80,16 @@ public abstract class Classifier {
     /**
      * A ByteBuffer to hold image data, to be feed into Tensorflow Lite as inputs.
      */
-    protected ByteBuffer imgData = null;
+    protected ByteBuffer imgData ;
 
     /**
      * Creates a classifier with the provided configuration.
      *
      * @param activity   The current Activity.
-     * @param model      The model to use for classification.
-     * @param device     The device to use for classification.
-     * @param numThreads The number of threads to use for classification.
      * @return A classifier with the desired configuration.
      */
-    public static Classifier create(Activity activity, Model model, Device device, int numThreads)
-            throws IOException {
-        if (model == Model.QUANTIZED) {
-            return new ClassifierQuantizedMobileNet(activity, device, numThreads);
-        } else {
-            return new ClassifierFloatMobileNet(activity, device, numThreads);
-        }
+    public static Classifier create(Activity activity) throws IOException {
+        return new ClassifierWorker(activity);
     }
 
     /**
@@ -151,8 +117,7 @@ public abstract class Classifier {
          */
         private RectF location;
 
-        public Recognition(
-                final String id, final String title, final Float confidence, final RectF location) {
+        public Recognition(final String id, final String title, final Float confidence, final RectF location) {
             this.id = id;
             this.title = title;
             this.confidence = confidence;
@@ -205,20 +170,10 @@ public abstract class Classifier {
     /**
      * Initializes a {@code Classifier}.
      */
-    protected Classifier(Activity activity, Device device, int numThreads) throws IOException {
+    protected Classifier(Activity activity) throws IOException {
         tfliteModel = loadModelFile(activity);
-        switch (device) {
-            case NNAPI:
-                tfliteOptions.setUseNNAPI(true);
-                break;
-            case GPU:
-                gpuDelegate = new GpuDelegate();
-                tfliteOptions.addDelegate(gpuDelegate);
-                break;
-            case CPU:
-                break;
-        }
-        tfliteOptions.setNumThreads(numThreads);
+
+        tfliteOptions.setNumThreads(1);
         tflite = new Interpreter(tfliteModel, tfliteOptions);
         labels = loadLabelList(activity);
         imgData =
@@ -229,14 +184,13 @@ public abstract class Classifier {
                                 * DIM_PIXEL_SIZE
                                 * getNumBytesPerChannel());
         imgData.order(ByteOrder.nativeOrder());
-        LOGGER.d("Created a Tensorflow Lite Image Classifier.");
     }
 
     /**
      * Reads label list from Assets.
      */
     private List<String> loadLabelList(Activity activity) throws IOException {
-        List<String> labels = new ArrayList<String>();
+        List<String> labels = new ArrayList<>();
         BufferedReader reader =
                 new BufferedReader(new InputStreamReader(activity.getAssets().open(getLabelPath())));
         String line;
@@ -270,15 +224,12 @@ public abstract class Classifier {
         bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
         // Convert the image to floating point.
         int pixel = 0;
-        long startTime = SystemClock.uptimeMillis();
         for (int i = 0; i < getImageSizeX(); ++i) {
             for (int j = 0; j < getImageSizeY(); ++j) {
                 final int val = intValues[pixel++];
                 addPixelValue(val);
             }
         }
-        long endTime = SystemClock.uptimeMillis();
-        LOGGER.v("Timecost to put values into ByteBuffer: " + (endTime - startTime));
     }
 
     /**
@@ -294,11 +245,8 @@ public abstract class Classifier {
 
         // Run the inference call.
         Trace.beginSection("runInference");
-        long startTime = SystemClock.uptimeMillis();
         runInference();
-        long endTime = SystemClock.uptimeMillis();
         Trace.endSection();
-        LOGGER.v("Timecost to run model inference: " + (endTime - startTime));
 
         // Find the best classifications.
         PriorityQueue<Recognition> pq =
@@ -332,10 +280,6 @@ public abstract class Classifier {
         if (tflite != null) {
             tflite.close();
             tflite = null;
-        }
-        if (gpuDelegate != null) {
-            gpuDelegate.close();
-            gpuDelegate = null;
         }
         tfliteModel = null;
     }

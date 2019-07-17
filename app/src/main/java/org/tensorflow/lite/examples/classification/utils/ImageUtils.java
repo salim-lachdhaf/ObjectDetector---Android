@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-package org.tensorflow.lite.examples.classification.env;
+package org.tensorflow.lite.examples.classification.utils;
 
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
@@ -30,8 +30,6 @@ public class ImageUtils {
     // are normalized to eight bits.
     static final int kMaxChannelValue = 262143;
 
-    @SuppressWarnings("unused")
-    private static final Logger LOGGER = new Logger();
 
     /**
      * Utility method to compute the allocated size in bytes of a YUV420SP image of the given
@@ -66,11 +64,11 @@ public class ImageUtils {
     public static void saveBitmap(final Bitmap bitmap, final String filename) {
         final String root =
                 Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "tensorflow";
-        LOGGER.i("Saving %dx%d bitmap to %s.", bitmap.getWidth(), bitmap.getHeight(), root);
+
         final File myDir = new File(root);
 
         if (!myDir.mkdirs()) {
-            LOGGER.i("Make dir failed");
+
         }
 
         final String fname = filename;
@@ -84,7 +82,7 @@ public class ImageUtils {
             out.flush();
             out.close();
         } catch (final Exception e) {
-            LOGGER.e(e, "Exception!");
+
         }
     }
 
@@ -179,7 +177,7 @@ public class ImageUtils {
 
         if (applyRotation != 0) {
             if (applyRotation % 90 != 0) {
-                LOGGER.w("Rotation of %d % 90 != 0", applyRotation);
+
             }
 
             // Translate so center of image is at origin.

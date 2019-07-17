@@ -47,22 +47,17 @@ import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.UiThread;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
-import org.tensorflow.lite.examples.classification.env.ImageUtils;
-import org.tensorflow.lite.examples.classification.env.Logger;
-import org.tensorflow.lite.examples.classification.tflite.Classifier.Device;
-import org.tensorflow.lite.examples.classification.tflite.Classifier.Model;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Recognition;
+import org.tensorflow.lite.examples.classification.utils.ImageUtils;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -72,7 +67,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
         Camera.PreviewCallback,
         View.OnClickListener,
         AdapterView.OnItemSelectedListener {
-    private static final Logger LOGGER = new Logger();
 
     private static final int PERMISSIONS_REQUEST = 1;
 
@@ -91,46 +85,28 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
     private LinearLayout bottomSheetLayout;
     private LinearLayout gestureLayout;
     private BottomSheetBehavior sheetBehavior;
-    protected TextView recognitionTextView,
-            recognition1TextView,
-            recognition2TextView,
-            recognitionValueTextView,
-            recognition1ValueTextView,
-            recognition2ValueTextView;
-    protected TextView frameValueTextView,
-            cropValueTextView,
-            cameraResolutionTextView,
-            rotationTextView,
-            inferenceTimeTextView;
-    protected ImageView bottomSheetArrowImageView;
-    private ImageView plusImageView, minusImageView;
-    private Spinner modelSpinner;
-    private Spinner deviceSpinner;
-    private TextView threadsTextView;
+    protected TextView recognitionTextView;
+    protected TextView recognition1TextView;
+    protected TextView recognition2TextView;
+    protected TextView recognitionValueTextView;
+    protected TextView recognition1ValueTextView;
+    protected TextView recognition2ValueTextView;
 
-    private Model model = Model.QUANTIZED;
-    private Device device = Device.CPU;
-    private int numThreads = -1;
+    protected ImageView bottomSheetArrowImageView;
     private TextToSpeech textToSpeech;
     private SensorManager mSensorManager;
     private Sensor accSensor;
     private Sensor magnetSensor;
     private float[] gravity;
     private float[] geoMagnetic;
-    private float azimut;
     private float pitch;
-    private float roll;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
-        LOGGER.d("onCreate " + this);
         super.onCreate(null);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.activity_camera);
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        getSupportActionBar().setDisplayShowTitleEnabled(false);
 
         if (hasPermission()) {
             setFragment();
@@ -148,11 +124,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
         accSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         magnetSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
-        threadsTextView = findViewById(R.id.threads);
-        plusImageView = findViewById(R.id.plus);
-        minusImageView = findViewById(R.id.minus);
-        modelSpinner = findViewById(R.id.model_spinner);
-        deviceSpinner = findViewById(R.id.device_spinner);
         bottomSheetLayout = findViewById(R.id.bottom_sheet_layout);
         gestureLayout = findViewById(R.id.gesture_layout);
         sheetBehavior = BottomSheetBehavior.from(bottomSheetLayout);
@@ -211,21 +182,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
         recognition2TextView = findViewById(R.id.detected_item2);
         recognition2ValueTextView = findViewById(R.id.detected_item2_value);
 
-        frameValueTextView = findViewById(R.id.frame_info);
-        cropValueTextView = findViewById(R.id.crop_info);
-        cameraResolutionTextView = findViewById(R.id.view_info);
-        rotationTextView = findViewById(R.id.rotation_info);
-        inferenceTimeTextView = findViewById(R.id.inference_info);
-
-        modelSpinner.setOnItemSelectedListener(this);
-        deviceSpinner.setOnItemSelectedListener(this);
-
-        plusImageView.setOnClickListener(this);
-        minusImageView.setOnClickListener(this);
-
-        model = Model.valueOf(modelSpinner.getSelectedItem().toString().toUpperCase());
-        device = Device.valueOf(deviceSpinner.getSelectedItem().toString());
-        numThreads = Integer.parseInt(threadsTextView.getText().toString().trim());
     }
 
     protected int[] getRgbBytes() {
@@ -247,7 +203,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
     @Override
     public void onPreviewFrame(final byte[] bytes, final Camera camera) {
         if (isProcessingFrame) {
-            LOGGER.w("Dropping frame!");
             return;
         }
 
@@ -261,7 +216,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
                 onPreviewSizeChosen(new Size(previewSize.width, previewSize.height), 90);
             }
         } catch (final Exception e) {
-            LOGGER.e(e, "Exception!");
             return;
         }
 
@@ -331,7 +285,7 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
 
             processImage();
         } catch (final Exception e) {
-            LOGGER.e(e, "Exception!");
+
             Trace.endSection();
             return;
         }
@@ -340,13 +294,13 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
 
     @Override
     public synchronized void onStart() {
-        LOGGER.d("onStart " + this);
+
         super.onStart();
     }
 
     @Override
     public synchronized void onResume() {
-        LOGGER.d("onResume " + this);
+
         super.onResume();
 
         handlerThread = new HandlerThread("inference");
@@ -359,7 +313,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
 
     @Override
     public synchronized void onPause() {
-        LOGGER.d("onPause " + this);
 
         handlerThread.quitSafely();
         try {
@@ -367,7 +320,7 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
             handlerThread = null;
             handler = null;
         } catch (final InterruptedException e) {
-            LOGGER.e(e, "Exception!");
+
         }
 
         super.onPause();
@@ -375,13 +328,11 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
 
     @Override
     public synchronized void onStop() {
-        LOGGER.d("onStop " + this);
         super.onStop();
     }
 
     @Override
     public synchronized void onDestroy() {
-        LOGGER.d("onDestroy " + this);
         super.onDestroy();
     }
 
@@ -463,11 +414,9 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
                         (facing == CameraCharacteristics.LENS_FACING_EXTERNAL)
                                 || isHardwareLevelSupported(
                                 characteristics, CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL);
-                LOGGER.i("Camera API lv2?: %s", useCamera2API);
                 return cameraId;
             }
         } catch (CameraAccessException e) {
-            LOGGER.e(e, "Not allowed to access camera");
         }
 
         return null;
@@ -505,7 +454,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
         for (int i = 0; i < planes.length; ++i) {
             final ByteBuffer buffer = planes[i].getBuffer();
             if (yuvBytes[i] == null) {
-                LOGGER.d("Initializing buffer %d at size %d", i, buffer.capacity());
                 yuvBytes[i] = new byte[buffer.capacity()];
             }
             buffer.get(yuvBytes[i]);
@@ -571,66 +519,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
         }
     }
 
-    protected void showFrameInfo(String frameInfo) {
-        frameValueTextView.setText(frameInfo);
-    }
-
-    protected void showCropInfo(String cropInfo) {
-        cropValueTextView.setText(cropInfo);
-    }
-
-    protected void showCameraResolution(String cameraInfo) {
-        cameraResolutionTextView.setText(previewWidth + "x" + previewHeight);
-    }
-
-    protected void showRotationInfo(String rotation) {
-        rotationTextView.setText(rotation);
-    }
-
-    protected void showInference(String inferenceTime) {
-        inferenceTimeTextView.setText(inferenceTime);
-    }
-
-    protected Model getModel() {
-        return model;
-    }
-
-    private void setModel(Model model) {
-        if (this.model != model) {
-            LOGGER.d("Updating  model: " + model);
-            this.model = model;
-            onInferenceConfigurationChanged();
-        }
-    }
-
-    protected Device getDevice() {
-        return device;
-    }
-
-    private void setDevice(Device device) {
-        if (this.device != device) {
-            LOGGER.d("Updating  device: " + device);
-            this.device = device;
-            final boolean threadsEnabled = device == Device.CPU;
-            plusImageView.setEnabled(threadsEnabled);
-            minusImageView.setEnabled(threadsEnabled);
-            threadsTextView.setText(threadsEnabled ? String.valueOf(numThreads) : "N/A");
-            onInferenceConfigurationChanged();
-        }
-    }
-
-    protected int getNumThreads() {
-        return numThreads;
-    }
-
-    private void setNumThreads(int numThreads) {
-        if (this.numThreads != numThreads) {
-            LOGGER.d("Updating  numThreads: " + numThreads);
-            this.numThreads = numThreads;
-            onInferenceConfigurationChanged();
-        }
-    }
-
     protected abstract void processImage();
 
     protected abstract void onPreviewSizeChosen(final Size size, final int rotation);
@@ -638,41 +526,6 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
     protected abstract int getLayoutId();
 
     protected abstract Size getDesiredPreviewFrameSize();
-
-    protected abstract void onInferenceConfigurationChanged();
-
-    @Override
-    public void onClick(View v) {
-        if (v.getId() == R.id.plus) {
-            String threads = threadsTextView.getText().toString().trim();
-            int numThreads = Integer.parseInt(threads);
-            if (numThreads >= 9) return;
-            setNumThreads(++numThreads);
-            threadsTextView.setText(String.valueOf(numThreads));
-        } else if (v.getId() == R.id.minus) {
-            String threads = threadsTextView.getText().toString().trim();
-            int numThreads = Integer.parseInt(threads);
-            if (numThreads == 1) {
-                return;
-            }
-            setNumThreads(--numThreads);
-            threadsTextView.setText(String.valueOf(numThreads));
-        }
-    }
-
-    @Override
-    public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
-        if (parent == modelSpinner) {
-            setModel(Model.valueOf(parent.getItemAtPosition(pos).toString().toUpperCase()));
-        } else if (parent == deviceSpinner) {
-            setDevice(Device.valueOf(parent.getItemAtPosition(pos).toString()));
-        }
-    }
-
-    @Override
-    public void onNothingSelected(AdapterView<?> parent) {
-        // Do nothing.
-    }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
@@ -689,9 +542,9 @@ public abstract class CameraActivity extends AppCompatActivity implements Sensor
                 float[] orientation = new float[3];
                 //SensorManager.remapCoordinateSystem(R, 1, 3, orientation);
                 SensorManager.getOrientation(r, orientation);
-                azimut = 57.29578F * orientation[0];
+                float azimut = 57.29578F * orientation[0];
                 pitch = 57.29578F * orientation[1];
-                roll = 57.29578F * orientation[2];
+                float roll = 57.29578F * orientation[2];
             }
         }
     }

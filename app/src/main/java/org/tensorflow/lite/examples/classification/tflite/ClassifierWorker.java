@@ -1,4 +1,4 @@
-/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,28 +19,24 @@ import android.app.Activity;
 
 import java.io.IOException;
 
-/** This TensorFlowLite classifier works with the float MobileNet model. */
-public class ClassifierFloatMobileNet extends Classifier {
-
-  /** MobileNet requires additional normalization of the used input. */
-  private static final float IMAGE_MEAN = 127.5f;
-  private static final float IMAGE_STD = 127.5f;
+/** This TensorFlow Lite classifier works with the quantized MobileNet model. */
+public class ClassifierWorker extends Classifier {
 
   /**
    * An array to hold inference results, to be feed into Tensorflow Lite as outputs. This isn't part
    * of the super class, because we need a primitive array here.
    */
-  private float[][] labelProbArray = null;
+  private byte[][] labelProbArray;
 
   /**
-   * Initializes a {@code ClassifierFloatMobileNet}.
+   * Initializes a {@code ClassifierWorker}.
    *
    * @param activity
    */
-  public ClassifierFloatMobileNet(Activity activity, Device device, int numThreads)
+  public ClassifierWorker(Activity activity)
       throws IOException {
-    super(activity, device, numThreads);
-    labelProbArray = new float[1][getNumLabels()];
+    super(activity);
+    labelProbArray = new byte[1][getNumLabels()];
   }
 
   @Override
@@ -58,24 +54,25 @@ public class ClassifierFloatMobileNet extends Classifier {
     // you can download this file from
     // see build.gradle for where to obtain this file. It should be auto
     // downloaded into assets.
-    return "mobilenet_v1_1.0_224.tflite";
+    return "objects.tflite";
   }
 
   @Override
   protected String getLabelPath() {
-    return "labels.txt";
+    return "object_Labels.txt";
   }
 
   @Override
   protected int getNumBytesPerChannel() {
-    return 4; // Float.SIZE / Byte.SIZE;
+    // the quantized model uses a single byte only
+    return 1;
   }
 
   @Override
   protected void addPixelValue(int pixelValue) {
-    imgData.putFloat((((pixelValue >> 16) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-    imgData.putFloat((((pixelValue >> 8) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-    imgData.putFloat(((pixelValue & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
+    imgData.put((byte) ((pixelValue >> 16) & 0xFF));
+    imgData.put((byte) ((pixelValue >> 8) & 0xFF));
+    imgData.put((byte) (pixelValue & 0xFF));
   }
 
   @Override
@@ -85,12 +82,12 @@ public class ClassifierFloatMobileNet extends Classifier {
 
   @Override
   protected void setProbability(int labelIndex, Number value) {
-    labelProbArray[0][labelIndex] = value.floatValue();
+    labelProbArray[0][labelIndex] = value.byteValue();
   }
 
   @Override
   protected float getNormalizedProbability(int labelIndex) {
-    return labelProbArray[0][labelIndex];
+    return (labelProbArray[0][labelIndex] & 0xff) / 255.0f;
   }
 
   @Override

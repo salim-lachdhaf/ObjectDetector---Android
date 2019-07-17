@@ -33,14 +33,14 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import org.tensorflow.lite.examples.classification.customview.AutoFitTextureView;
-import org.tensorflow.lite.examples.classification.env.ImageUtils;
-import org.tensorflow.lite.examples.classification.env.Logger;
+import org.tensorflow.lite.examples.classification.utils.ImageUtils;
 
 import java.io.IOException;
 import java.util.List;
 
 public class LegacyCameraConnectionFragment extends Fragment {
-    private static final Logger LOGGER = new Logger();
+
+    public LegacyCameraConnectionFragment(){}
     /**
      * Conversion from screen rotation to JPEG orientation.
      */
@@ -195,8 +195,7 @@ public class LegacyCameraConnectionFragment extends Fragment {
         try {
             backgroundThread.join();
             backgroundThread = null;
-        } catch (final InterruptedException e) {
-            LOGGER.e(e, "Exception!");
+        } catch (InterruptedException ignored) {
         }
     }
 

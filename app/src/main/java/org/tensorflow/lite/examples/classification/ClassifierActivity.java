@@ -20,37 +20,24 @@ import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
-import android.graphics.Typeface;
 import android.media.ImageReader.OnImageAvailableListener;
-import android.os.SystemClock;
 import android.util.Size;
-import android.util.TypedValue;
-import android.widget.Toast;
+import android.view.View;
+import android.widget.AdapterView;
 
-import org.tensorflow.lite.examples.classification.env.BorderedText;
-import org.tensorflow.lite.examples.classification.env.ImageUtils;
-import org.tensorflow.lite.examples.classification.env.Logger;
 import org.tensorflow.lite.examples.classification.tflite.Classifier;
-import org.tensorflow.lite.examples.classification.tflite.Classifier.Device;
-import org.tensorflow.lite.examples.classification.tflite.Classifier.Model;
+import org.tensorflow.lite.examples.classification.utils.ImageUtils;
 
 import java.io.IOException;
 import java.util.List;
 
 public class ClassifierActivity extends CameraActivity implements OnImageAvailableListener {
-    private static final Logger LOGGER = new Logger();
     private static final boolean MAINTAIN_ASPECT = true;
     private static final Size DESIRED_PREVIEW_SIZE = new Size(640, 480);
-    private static final float TEXT_SIZE_DIP = 10;
     private Bitmap rgbFrameBitmap = null;
     private Bitmap croppedBitmap = null;
-    private Bitmap cropCopyBitmap = null;
-    private long lastProcessingTimeMs;
-    private Integer sensorOrientation;
     private Classifier classifier;
     private Matrix frameToCropTransform;
-    private Matrix cropToFrameTransform;
-    private BorderedText borderedText;
 
     @Override
     protected int getLayoutId() {
@@ -64,25 +51,18 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
 
     @Override
     public void onPreviewSizeChosen(final Size size, final int rotation) {
-        final float textSizePx =
-                TypedValue.applyDimension(
-                        TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, getResources().getDisplayMetrics());
-        borderedText = new BorderedText(textSizePx);
-        borderedText.setTypeface(Typeface.MONOSPACE);
 
-        recreateClassifier(getModel(), getDevice(), getNumThreads());
+
+        recreateClassifier();
         if (classifier == null) {
-            LOGGER.e("No classifier on preview!");
             return;
         }
 
         previewWidth = size.getWidth();
         previewHeight = size.getHeight();
 
-        sensorOrientation = rotation - getScreenOrientation();
-        LOGGER.i("Camera orientation relative to screen canvas: %d", sensorOrientation);
+        int sensorOrientation = rotation - getScreenOrientation();
 
-        LOGGER.i("Initializing at size %dx%d", previewWidth, previewHeight);
         rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Config.ARGB_8888);
         croppedBitmap =
                 Bitmap.createBitmap(
@@ -97,7 +77,7 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                         sensorOrientation,
                         MAINTAIN_ASPECT);
 
-        cropToFrameTransform = new Matrix();
+        Matrix cropToFrameTransform = new Matrix();
         frameToCropTransform.invert(cropToFrameTransform);
     }
 
@@ -110,59 +90,39 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
         runInBackground(
                 () -> {
                     if (classifier != null) {
-                        final long startTime = SystemClock.uptimeMillis();
                         final List<Classifier.Recognition> results = classifier.recognizeImage(croppedBitmap);
-                        lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
-                        LOGGER.v("Detect: %s", results);
-                        cropCopyBitmap = Bitmap.createBitmap(croppedBitmap);
 
-                        runOnUiThread(
-                                () -> {
-                                    showResultsInBottomSheet(results);
-                                    showFrameInfo(previewWidth + "x" + previewHeight);
-                                    showCropInfo(cropCopyBitmap.getWidth() + "x" + cropCopyBitmap.getHeight());
-                                    showCameraResolution(canvas.getWidth() + "x" + canvas.getHeight());
-                                    showRotationInfo(String.valueOf(sensorOrientation));
-                                    showInference(lastProcessingTimeMs + "ms");
-                                });
+                        runOnUiThread(() -> showResultsInBottomSheet(results));
                     }
                     readyForNextImage();
                 });
     }
 
-    @Override
-    protected void onInferenceConfigurationChanged() {
-        if (croppedBitmap == null) {
-            // Defer creation until we're getting camera frames.
-            return;
-        }
-        final Device device = getDevice();
-        final Model model = getModel();
-        final int numThreads = getNumThreads();
-        runInBackground(() -> recreateClassifier(model, device, numThreads));
-    }
-
-    private void recreateClassifier(Model model, Device device, int numThreads) {
+    private void recreateClassifier() {
         if (classifier != null) {
-            LOGGER.d("Closing classifier.");
             classifier.close();
             classifier = null;
         }
-        if (device == Device.GPU && model == Model.QUANTIZED) {
-            LOGGER.d("Not creating classifier: GPU doesn't support quantized models.");
-            runOnUiThread(
-                    () -> {
-                        Toast.makeText(this, "GPU does not yet supported quantized models.", Toast.LENGTH_LONG)
-                                .show();
-                    });
-            return;
-        }
         try {
-            LOGGER.d(
-                    "Creating classifier (model=%s, device=%s, numThreads=%d)", model, device, numThreads);
-            classifier = Classifier.create(this, model, device, numThreads);
-        } catch (IOException e) {
-            LOGGER.e(e, "Failed to create classifier.");
+
+            classifier = Classifier.create(this);
+        } catch (IOException ignored) {
+
         }
+    }
+
+    @Override
+    public void onClick(View v) {
+
+    }
+
+    @Override
+    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+
+    }
+
+    @Override
+    public void onNothingSelected(AdapterView<?> parent) {
+
     }
 }
